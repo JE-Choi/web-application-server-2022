@@ -3,17 +3,19 @@ package webserver;
 import java.io.*;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.Map;
 
 import db.DataBase;
+import lombok.extern.slf4j.Slf4j;
 import model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import util.HttpRequestUtils;
+import util.IOUtils;
 
+@Slf4j
 public class RequestHandler extends Thread {
-    private static final Logger log = LoggerFactory.getLogger(RequestHandler.class);
-
     private Socket connection;
 
     public RequestHandler(Socket connectionSocket) {
@@ -31,39 +33,51 @@ public class RequestHandler extends Thread {
             String readLine = bufferedReader.readLine();
             final String requestURL = readLine;
             log.debug("request:line: {}", requestURL);
-            String accept = "text/html";
+            final Map<String, String> requestHeader = new HashMap<>();
             while (!"".equals(readLine) && readLine != null) {
                 log.debug("read:line: {}", readLine);
                 String[] split = readLine.split(":");
                 if (!requestURL.equals(readLine)) {
                     String headerName = split[0];
                     String headerValue = split[1];
-                    if ("Accept".equals(headerName)) {
-                        accept = headerValue;
-                    }
+                    requestHeader.put(headerName, headerValue);
                 }
                 readLine = bufferedReader.readLine();
             }
-            log.debug("accept: {}", accept);
+            log.info(requestHeader.toString());
             // requestURL 분석 (https://www.beusable.net/blog/?p=1687)
             final String[] requestSplit = requestURL.split(" ");
             final String method = requestSplit[0];
             final String path = !"/".equals(requestSplit[1]) ? requestSplit[1] : "/index.html";
             final String version = requestSplit[2];
 
-            // todo: pathname이 유효하지 않아도, 에러발생하지 않음.
-            byte[] body = Files.readAllBytes(new File("./webapp" + path).toPath());
-            if ("GET".equals(method)) {
-                final String[] split = path.split("\\?");
-                final String url = split[0];
-                if (split.length > 1) {
-                    final String queryString = split[1];
-                    final Map<String, String> stringStringMap = HttpRequestUtils.parseQueryString(queryString);
-                    if ("/user/create".equals(url)) {
+            byte[] body;
+            String movePath = path;
+            try{
+                if ("GET".equals(method)) {
+                    final String[] split = path.split("\\?");
+                    final String url = split[0];
+                    if (split.length > 1) {
+                        final String queryString = split[1];
+                        final Map<String, String> stringStringMap = HttpRequestUtils.parseQueryString(queryString);
+                        if ("/user/create".equals(url)) {
+                            DataBase.addUser(new User(stringStringMap));
+                            movePath="index.html";
+                        }
+                    }
+                } else if ("POST".equals(method)) {
+                    if ("/user/create".equals(path)) {
+                        final String contentLength = requestHeader.get("Content-Length");
+                        String requestBody = IOUtils.readData(bufferedReader, Integer.parseInt(contentLength.trim()));
+                        final Map<String, String> stringStringMap = HttpRequestUtils.parseQueryString(requestBody);
                         DataBase.addUser(new User(stringStringMap));
-                        body = Files.readAllBytes(new File("./webapp/index.html").toPath());
+                        movePath="index.html";
                     }
                 }
+
+                body =  Files.readAllBytes(new File("./webapp" + movePath).toPath());
+            } catch (IOException e){
+                body =  Files.readAllBytes(new File("./webapp/index.html").toPath());
             }
 
             // 출력
