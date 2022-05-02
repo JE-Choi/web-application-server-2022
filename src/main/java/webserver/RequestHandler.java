@@ -18,6 +18,8 @@ import util.IOUtils;
 public class RequestHandler extends Thread {
     private Socket connection;
 
+    private String indexFileName = "/index.html";
+
     public RequestHandler(Socket connectionSocket) {
         this.connection = connectionSocket;
     }
@@ -53,7 +55,7 @@ public class RequestHandler extends Thread {
 
             byte[] body;
             String movePath = path;
-            try{
+            try {
                 if ("GET".equals(method)) {
                     final String[] split = path.split("\\?");
                     final String url = split[0];
@@ -62,7 +64,6 @@ public class RequestHandler extends Thread {
                         final Map<String, String> stringStringMap = HttpRequestUtils.parseQueryString(queryString);
                         if ("/user/create".equals(url)) {
                             DataBase.addUser(new User(stringStringMap));
-                            movePath="index.html";
                         }
                     }
                 } else if ("POST".equals(method)) {
@@ -71,19 +72,20 @@ public class RequestHandler extends Thread {
                         String requestBody = IOUtils.readData(bufferedReader, Integer.parseInt(contentLength.trim()));
                         final Map<String, String> stringStringMap = HttpRequestUtils.parseQueryString(requestBody);
                         DataBase.addUser(new User(stringStringMap));
-                        movePath="index.html";
+                        DataOutputStream dos = new DataOutputStream(out);
+                        response302Header(dos, indexFileName);
+                        return;
                     }
                 }
-
-                body =  Files.readAllBytes(new File("./webapp" + movePath).toPath());
-            } catch (IOException e){
-                body =  Files.readAllBytes(new File("./webapp/index.html").toPath());
+                body = Files.readAllBytes(new File("./webapp" + movePath).toPath());
+                // 출력
+                DataOutputStream dos = new DataOutputStream(out);
+                response200Header(dos, body.length);
+                responseBody(dos, body);
+            } catch (IOException e) {
+                DataOutputStream dos = new DataOutputStream(out);
+                response302Header(dos, indexFileName);
             }
-
-            // 출력
-            DataOutputStream dos = new DataOutputStream(out);
-            response200Header(dos, body.length);
-            responseBody(dos, body);
         } catch (IOException e) {
             log.error(e.getMessage());
         }
@@ -94,6 +96,16 @@ public class RequestHandler extends Thread {
             dos.writeBytes("HTTP/1.1 200 OK \r\n");
             dos.writeBytes("Content-Type: text/html;charset=utf-8\r\n");
             dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
+            dos.writeBytes("\r\n");
+        } catch (IOException e) {
+            log.error(e.getMessage());
+        }
+    }
+
+    private void response302Header(DataOutputStream dos, String url) {
+        try {
+            dos.writeBytes("HTTP/1.1 302 Redirect \r\n");
+            dos.writeBytes("Location: " + url + " \r\n");
             dos.writeBytes("\r\n");
         } catch (IOException e) {
             log.error(e.getMessage());
