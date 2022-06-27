@@ -3,14 +3,11 @@ package webserver;
 import java.io.*;
 import java.net.Socket;
 import java.nio.file.Files;
-import java.util.HashMap;
 import java.util.Map;
 
 import db.DataBase;
 import lombok.extern.slf4j.Slf4j;
 import model.User;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import util.HttpRequestUtils;
 import util.IOUtils;
 
@@ -32,20 +29,12 @@ public class RequestHandler extends Thread {
             // TODO 사용자 요청에 대한 처리는 이 곳에 구현하면 된다.
             // 요청 읽기 (requestURL, header)
             final BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
-            String readLine = bufferedReader.readLine();
-            final String requestURL = readLine;
+
+
+            final MyHttpServletRequest myHttpServletRequest = new MyHttpServletRequest(bufferedReader);
+            final String requestURL = myHttpServletRequest.getRequestURL();
             log.debug("request:line: {}", requestURL);
-            final Map<String, String> requestHeader = new HashMap<>();
-            while (!"".equals(readLine) && readLine != null) {
-                log.debug("read:line: {}", readLine);
-                String[] split = readLine.split(":");
-                if (!requestURL.equals(readLine)) {
-                    String headerName = split[0];
-                    String headerValue = split[1];
-                    requestHeader.put(headerName, headerValue);
-                }
-                readLine = bufferedReader.readLine();
-            }
+            final Map<String, String> requestHeader = myHttpServletRequest.getRequestHeader();
             log.info(requestHeader.toString());
             // requestURL 분석 (https://www.beusable.net/blog/?p=1687)
             final String[] requestSplit = requestURL.split(" ");
